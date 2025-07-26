@@ -18,11 +18,11 @@ headers = {
     'Authorization': f'Bearer {os.getenv("DOTLIST_JWT")}',
 }
 
-userCount = json.loads(requests.get('https://polished-beagle-841.convex.site/users').text).get("totalUsers")
+userCount = json.loads(requests.get('https://sensible-hawk-744.convex.site/users', headers={"X-API-KEY": os.getenv("DOTLIST_DEV_KEY")}).text).get("totalUsers")
 
 @client.event
 async def on_ready():
-    await client.change_presence(status=discord.Status.online, activity=discord.Activity(name=f"custom", type=discord.ActivityType.custom, state=f"dotbotting with {userCount} users"))
+    await client.change_presence(status=discord.Status.online, activity=discord.Activity(name=f"custom", type=discord.ActivityType.custom, state=f"dotlisting with {userCount} users"))
     await tree.sync()
     print(f'Logged in as {client.user}')
     
@@ -32,11 +32,15 @@ async def test_command(interaction: discord.Interaction):
 
     }
     response = requests.get(
-        'https://polished-beagle-841.convex.site/lists/k97bff2sazfcygnhyddgtx5r857mc207/items',
+        'https://polished-beagle-841.convex.site/health',
         params=params,
         headers=headers
     )
-    await interaction.response.send_message(json.dumps(json.loads(response.text), indent=4))
+    try: 
+        await interaction.response.send_message(json.dumps(json.loads(response.text), indent=4))
+    except Exception as e:
+        await interaction.response.send_message(response.text)
+
     print(f'Command run by {interaction.user.name}')
 
 client.run(os.getenv("BOT_TOKEN"))
