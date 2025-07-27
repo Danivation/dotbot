@@ -14,16 +14,18 @@ convex_client = ConvexClient("https://sensible-hawk-744.convex.cloud")
 
 load_dotenv()
 
+keyring.set_keyring
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client=client)
+list_group = app_commands.Group(name="list", description="List related commands")
 
 userCount = json.loads(requests.get('https://sensible-hawk-744.convex.site/users', headers={"X-API-KEY": os.getenv("DOTLIST_DEV_KEY")}).text).get("totalUsers")
 
-
-def authenticate(userId: str, login: bool = False):
-    currentToken = keyring.get_password("dotbot", userId)
+def authenticate(discordUsername: str, login: bool = False) -> str | None:
+    userId = keyring.get_password("dotbot_uid", discordUsername)
+    currentToken = keyring.get_password("dotlist_jwt", userId)
     try:
         decoded = jwt.decode(currentToken, algorithms="RS256", key=os.getenv("DOTLIST_PUBLIC_KEY"), audience="convex").get("exp")
     except Exception as e:
@@ -46,13 +48,17 @@ def authenticate(userId: str, login: bool = False):
             "alg": "RS256"
         }
         newToken = jwt.encode(payload=payload, key=os.getenv("DOTLIST_PRIVATE_KEY"), headers=header)
-        keyring.set_password("dotbot", userId, newToken)
+        keyring.set_password("dotlist_jwt", userId, newToken)
+        return newToken
     else:
         print("Using old token")
+        return currentToken
+    return None
 
 @client.event
 async def on_ready():
     await client.change_presence(status=discord.Status.online, activity=discord.Activity(name=f"custom", type=discord.ActivityType.custom, state=f"dotlisting with {userCount} users"))
+    tree.add_command(list_group)
     await tree.sync()
     print(f'Logged in as {client.user}')
 
@@ -68,7 +74,8 @@ async def login_cmd(interaction: discord.Interaction, username: str):
         #raise e
     else:
         try:
-            authenticate(userId, True)
+            keyring.set_password("dotbot_uid", interaction.user.name, userId)
+            authenticate(interaction.user.name, True)
         except Exception as e:
             await interaction.response.send_message("Error authenticating. Please try again.")
             #raise e
@@ -77,13 +84,13 @@ async def login_cmd(interaction: discord.Interaction, username: str):
 
     print(f'Command `login` run by {interaction.user.name} returned {user}')
 
-@tree.command(name="test", description="A test command")
-async def test_command(interaction: discord.Interaction):
+@tree.command(name="ping", description="Ping the server's health")
+async def ping_cmd(interaction: discord.Interaction):
     params = {
 
     }
     response = requests.get(
-        'https://polished-beagle-841.convex.site/health',
+        'https://sensible-hawk-744.convex.site/health',
         params=params
     )
     try:
@@ -91,7 +98,21 @@ async def test_command(interaction: discord.Interaction):
     except Exception as e:
         await interaction.response.send_message(response.text)
 
-    print(f'Command `test` run by {interaction.user.name} returned {response.text}')
+    print(f'Command `ping` run by {interaction.user.name} returned {response.text}')
+
+@list_group.command(name="all", description="Returns all user lists")
+async def list_all_cmd(interaction: discord.Interaction):
+    convex_client.set_auth(authenticate(interaction.user.name))
+    lists = convex_client.query("lists:getLists")
+    excluded_keys = {"nodes", "userId", "order", "_creationTime", "teamId", "updatedAt"}
+    just_lists = [
+        {k: v for k, v in list_entry.items() if k not in excluded_keys}
+        for list_entry in lists
+    ]
+    print(json.dumps(just_lists, indent=4))
+    await interaction.response.send_message(json.dumps(just_lists, indent=4))
+    convex_client.set_auth(None)
+
 
 @tree.command(name="user", description="Get info about your user profile")
 async def user_cmd(interaction: discord.Interaction):
