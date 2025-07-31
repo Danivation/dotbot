@@ -9,6 +9,7 @@ import jwt
 import datetime
 import cryptography
 from convex import ConvexClient
+import random
 
 convex_client = ConvexClient("https://sensible-hawk-744.convex.cloud")
 
@@ -62,9 +63,18 @@ async def on_ready():
     await tree.sync()
     print(f'Logged in as {client.user}')
 
-@tree.command(name="login", description="Log in to Dotbot")
+@tree.command(name="aadish", description="Aadish message")
+async def aadish_cmd(interaction: discord.Interaction):
+    random.seed(int(datetime.datetime.now().timestamp()))
+    sel1 = random.random()
+    if (sel1 < 0.5): await interaction.response.send_message("...")
+    else:
+        await interaction.response.send_message("use dotlist lite")
+
+@tree.command(name="login", description="Log in to Dotbot. Requires a key generated in Dotlist.")
 @app_commands.describe(username="Your Dotlist username")
-async def login_cmd(interaction: discord.Interaction, username: str):
+@app_commands.describe(key="Dotlist authentication key, generated in Dotlist settings")
+async def login_cmd(interaction: discord.Interaction, username: str, key: int):
     user = convex_client.query("main:findUserByUsername", {"username": username})
 
     try:
@@ -75,7 +85,13 @@ async def login_cmd(interaction: discord.Interaction, username: str):
     else:
         try:
             keyring.set_password("dotbot_uid", interaction.user.name, userId)
-            authenticate(interaction.user.name, True)
+            convex_client.set_auth(authenticate(interaction.user.name, True))
+            verifiedKey = convex_client.query("auth:getAuthKey")
+            if (verifiedKey != key) :
+                convex_client.set_auth(None)
+                await interaction.response.send_message("Invalid key passed.")
+                return
+                #raise KeyError
         except Exception as e:
             await interaction.response.send_message("Error authenticating. Please try again.")
             #raise e
